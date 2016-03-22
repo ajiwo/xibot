@@ -1,6 +1,5 @@
 #include "attrs.h"
 #include "simple-time.h"
-#include "xmdsclient.h"
 #include "xignal.h"
 #include <xmdsclient/xmds.h>
 

@@ -1,13 +1,14 @@
-#include <string.h>
-
-#include "xignal.h"
-#include <xmdsclient/xmds-util.h>
-#include <xmdsclient/xmds.h>
 #include "player.h"
 #include "xibot.h"
+#include "xignal.h"
+#include "state.h"
+#include <xmdsclient/xmds-util.h>
+#include <xmdsclient/xmds.h>
+#include <string.h>
 #include <unistd.h>
 
-void _xmds_run_thread(xmdsConfig cfg, xibot_attr_t attr);
+extern thrlck_t _xibot_state;
+void _xmds_run_thread(xmds_attr_t *attr);
 
 int load_config(xmdsConfig *cfg, const char *path) {
     unsigned char *data;
@@ -57,7 +58,7 @@ void *xibot_schedule_handler(void *arg) {
     static pthread_t thread;
     pthread_attr_t thr_attr;
 
-    if(xibot_interrupted) {
+    if(xibot_is_interrupted()) {
         return NULL;
     }
 
@@ -102,7 +103,7 @@ void *xibot_schedule_handler(void *arg) {
     }
 
     if(!xibot_thr_exists(thread)) {
-        if(!xibot_play_interrupted) {
+        if(!xibot_is_interrupted()) {
             lpp = malloc(sizeof(layout_play_param_t));
             lpp->layout = xlfparser_layout_dup(layout);
             lpp->layout_id = layout_id;
@@ -123,7 +124,7 @@ void *xibot_schedule_handler(void *arg) {
 
     xlfparser_delete_layout(layout);
 
-    if(xibot_interrupted || xibot_play_interrupted) {
+    if(xibot_is_interrupted()) {
         while(xibot_thr_exists(thread)) {
             fprintf(stderr, "Waiting play thread %lu\n", thread);
             usleep(100);
@@ -134,23 +135,40 @@ void *xibot_schedule_handler(void *arg) {
 }
 
 
-void xibot_run(xibot_attr_t xpr) {
+void xibot_run(xibot_attr_t *xibot_attr) {
     xmdsConfig cfg;
-    xmds_callbacks_t cb;
+    xmds_attr_t xmds_attr;
+    xibot_running_t xibot_running;
     struct sigaction act, oact;
 
     xibot_set_sa(act, xibot_sigint_handler, oact, SIGINT);
     xibot_set_sa(act, xibot_sigusr1_handler, oact, SIGUSR1);
 
-    memset(&cb, '\0', sizeof(xmds_callbacks_t));
-    if(xpr.on_schedule_cb == NULL) {
-        xpr.on_schedule_cb = xibot_schedule_handler;
+    memset(&xmds_attr, '\0', sizeof(xmds_attr_t));
+    memset(&xibot_running, '\0', sizeof(xibot_running_t));
+
+    _xibot_state.data = &xibot_running;
+
+    if(xibot_attr->on_schedule_cb == NULL) {
+        xibot_attr->on_schedule_cb = xibot_schedule_handler;
     }
+
     xmdsConfigInit(&cfg);
-    load_config(&cfg, xpr.cfg_path);
-    _xmds_run_thread(cfg, xpr);
+    load_config(&cfg, xibot_attr->cfg_path);
+
+    xmds_attr.cfg = cfg;
+
+    xmds_attr.media_play_cb = xibot_attr->media_play_cb;
+    xmds_attr.region_play_cb = xibot_attr->region_play_cb;
+    xmds_attr.layout_play_cb = xibot_attr->layout_play_cb;
+
+    xmds_attr.callbacks.on_schedule_cb = xibot_attr->on_schedule_cb;
+    xmds_attr.callbacks.on_layout_downloaded = xibot_attr->on_layout_downloaded;
+
+    _xmds_run_thread(&xmds_attr);
     xmdsConfigFree(&cfg);
 
+    fprintf(stderr, "\nxibot_run finished.\n");
     xibot_restore_sa(oact, SIGINT);
     xibot_restore_sa(oact, SIGUSR1);
 }

@@ -1,4 +1,5 @@
 #include "attrs.h"
+#include "state.h"
 #include "simple-time.h"
 #include "xignal.h"
 #include <xmdsclient/xmds.h>
@@ -8,18 +9,9 @@
 #include <unistd.h>
 #include <pthread.h>
 
+extern thrlck_t _xibot_state;
 
-typedef struct _xmds_params {
-    xmdsConfig cfg;
-    schedule_attr_t si;
-    xmds_callbacks_t callbacks;
-    xibot_callback_fn media_stop_cb;
-    xibot_callback_fn media_play_cb;
-    xibot_callback_fn region_play_cb;
-    xibot_callback_fn layout_play_cb;
-} xmds_params_t;
-
-static int register_display(xmdsConfig cfg, xibot_display_attr_t *props) {
+static int register_display(xmdsConfig cfg, xmds_display_attr_t *props) {
     xmdsNode *node;
     registerDisplayEntry *entry;
     registerDisplayDetail *detail;
@@ -54,7 +46,7 @@ static int md5sum_match(const char *path, const char *md5um) {
     return !strcmp(_md5sum, md5um);
 }
 
-static int required_files(xmds_params_t *xmds_params) {
+static int required_files(xmds_attr_t *xmds_params) {
     xmdsNode *node;
     requiredFilesEntry *entry;
     int i, len;
@@ -63,7 +55,7 @@ static int required_files(xmds_params_t *xmds_params) {
     node = xmdsRequiredFiles(xmds_params->cfg, &len);
 
     for(i = 0; i < len; i++) {
-        if(xibot_interrupted)
+        if(xibot_is_interrupted())
             break;
 
         entry = xmdsRequiredFilesEntry(node, i);
@@ -104,13 +96,13 @@ static int required_files(xmds_params_t *xmds_params) {
         }
     }
     xmdsFree(node);
-    if(xibot_interrupted)
+    if(xibot_is_interrupted())
         fprintf(stderr, "required_files() INTERRUPTED\n");
 
     return len;
 }
 
-static int schedule(xmds_params_t *xmds_param) {
+static int schedule(xmds_attr_t *xmds_param) {
     xmdsNode *node;
     scheduleEntry *s_entry;
     scheduleLayoutEntry *l_entry;
@@ -171,73 +163,68 @@ static int schedule(xmds_params_t *xmds_param) {
 }
 
 void *xmds_cycle(void *arg) {
-    xmds_params_t *xp;
-    xibot_display_attr_t di;
+    xmds_attr_t *xmds_attr;
+    xmds_display_attr_t di;
 
     time_t t1;
 
-    memset(&di, '\0', sizeof(xibot_display_attr_t));
-    xp = (xmds_params_t *) arg;
-
-    register_display(xp->cfg, &di);
+    memset(&di, '\0', sizeof(xmds_display_attr_t));
+    xmds_attr = (xmds_attr_t *) arg;
+    xibot_set_state(&_xibot_state, XIBOT_STATE_XMDS, XIBOT_STATE_TRUE);
+    register_display(xmds_attr->cfg, &di);
 
     if(di.collectInterval > 0) {
-        if(required_files(xp)) {
-            schedule(xp);
+        if(required_files(xmds_attr)) {
+            schedule(xmds_attr);
         }
         t1 = time(NULL) + di.collectInterval;
     } else {
-        t1 = time(NULL) + xp->cfg.collectInterval;
+        t1 = time(NULL) + xmds_attr->cfg.collectInterval;
     }
 
     while(time(NULL) < t1) {
         usleep(100);
-        if(xibot_play_interrupted) {
+        if(xibot_is_play_interrupted()) {
             usleep(50);
             break;
         }
-        if(xibot_interrupted)
+        if(xibot_is_interrupted())
             break;
     }
 
-    if(xibot_play_interrupted) {
-        /*fprintf(stderr, "xmds_cycle() play INTERRUPTED\n");*/
-        xibot_clear_sigusr1;
+    while(xibot_get_state(&_xibot_state, XIBOT_STATE_LAYOUT_PLAY) == XIBOT_STATE_TRUE) {
+        usleep(100);
     }
 
-    pthread_exit(NULL);
+    if(xibot_is_play_interrupted())
+        xibot_set_state(&_xibot_state, XIBOT_PLAY_INTERRUPTED, XIBOT_STATE_FALSE);
+
+    xibot_set_state(&_xibot_state, XIBOT_STATE_XMDS, XIBOT_STATE_FALSE);
+    return NULL;
 }
 
+
 /* invoked by xibot.c/xibot_run() */
-void _xmds_run_thread(xmdsConfig cfg, xibot_attr_t xibot_attr) {
-    static pthread_t thread;
-    pthread_attr_t attr;
-    xmds_params_t xp;
+void _xmds_run_thread(xmds_attr_t *xmds_attr) {
+    static pthread_t pth;
+    pthread_attr_t pth_attr;
 
-    memset(&xp, '\0', sizeof(xmds_params_t));
-
-    xp.cfg = cfg;
-    xp.callbacks.on_schedule_cb = xibot_attr.on_schedule_cb;
-    xp.callbacks.on_layout_downloaded = xibot_attr.on_layout_downloaded;
-    xp.media_play_cb = xibot_attr.media_play_cb;
-    xp.region_play_cb = xibot_attr.region_play_cb;
-    xp.layout_play_cb = xibot_attr.layout_play_cb;
-    pthread_attr_init(&attr);
-    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+    pthread_attr_init(&pth_attr);
+    pthread_attr_setdetachstate(&pth_attr, PTHREAD_CREATE_DETACHED);
 
     while(1) {
-        if(xibot_interrupted)
+        if(xibot_is_interrupted())
             break;
-        if(!xibot_thr_exists(thread)) {
-            if(pthread_create(&thread, &attr, xmds_cycle, &xp) == 0) {
-                fprintf(stderr, "Created xmds thread %lu\n",thread);
+        if(!xmds_is_running()) {
+            if(pthread_create(&pth, &pth_attr, xmds_cycle, xmds_attr) == 0) {
+                fprintf(stderr, "Created xmds thread %lu\n",pth);
             }
         }
         usleep(100);
     }
 
-    while(xibot_thr_exists(thread))
+    while(xmds_is_running())
         usleep(100);
 
-    pthread_attr_destroy(&attr);
+    pthread_attr_destroy(&pth_attr);
 }

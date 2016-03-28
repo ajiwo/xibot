@@ -7,17 +7,9 @@
 
 void *my_media_play(void *arg) {
     media_play_param_t *mpp;
-    time_t t1;
     mpp = (media_play_param_t *) arg;
-    fprintf(stderr, "media %s playing for %d seconds\n", mpp->media->id, mpp->media->duration);
-    t1 = time(NULL) + mpp->media->duration;
-
-    /* play simulation */
-    while(time(NULL) < t1)
-        sleep(1);
-
-    media_play_param_free(&mpp);
-    return NULL;
+    fprintf(stderr, "media %s is playing for %d secs\n", mpp->media->id, mpp->media->duration);
+    return xibot_media_play(arg);
 }
 
 void *my_region_play(void *arg) {
@@ -45,6 +37,6 @@ int main() {
     attr.layout_play_cb = my_layout_play;
     attr.region_play_cb = my_region_play;
     attr.media_play_cb = my_media_play;
-    xibot_run(attr);
+    xibot_run(&attr);
     return 0;
 }

@@ -4,7 +4,7 @@
 #ifdef	__cplusplus
 extern "C" {
 #endif
-void xibot_run(xibot_attr_t xp);
+void xibot_run(xibot_attr_t *attr);
 #ifdef	__cplusplus
 }
 #endif /* __cplusplus */

@@ -1,21 +1,15 @@
 #include "xignal.h"
-#include <stdlib.h>
-
-int xibot_sig_query(int id, int newval) {
-    static int val[2];
-
-    if(newval > -1) {
-        val[id] = newval;
-        return 0;
-    }
-
-    return val[id];
-}
+#include "state.h"
 
 void xibot_sigint_handler(int signum) {
-    xibot_sig_query(XIBOT_SIGINT_ID, signum);
+    if(signum == SIGINT) {
+        xibot_set_state(&_xibot_state, XIBOT_INTERRUPTED, XIBOT_STATE_TRUE);
+        xibot_set_state(&_xibot_state, XIBOT_PLAY_INTERRUPTED, XIBOT_STATE_TRUE);
+    }
 }
 
 void xibot_sigusr1_handler(int signum) {
-    xibot_sig_query(XIBOT_SIGUSR1_ID, signum);
+    if(signum == SIGUSR1) {
+        xibot_set_state(&_xibot_state, XIBOT_PLAY_INTERRUPTED, XIBOT_STATE_TRUE);
+    }
 }

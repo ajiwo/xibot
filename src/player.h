@@ -31,7 +31,6 @@ struct _region_play_param {
     int nopt;
     char *saveDir;
     xibot_callback_fn media_play_cb;
-
 };
 
 struct _layout_play_param {

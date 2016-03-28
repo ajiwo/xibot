@@ -10,7 +10,9 @@ set(srcs
     src/player.c
     src/xmdsclient.c
     src/simple-time.c
+    src/thrlck.c
     src/xibot.c
+    src/state.c
     src/xignal.c
 )
 

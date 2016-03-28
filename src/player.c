@@ -1,3 +1,4 @@
+#include "state.h"
 #include "xignal.h"
 #include <xmdsclient/xmds-util.h>
 
@@ -7,17 +8,12 @@
 #include <unistd.h>
 #include <time.h>
 
-#ifdef xibot_interrupted
-#undef xibot_interrupted
-#define xibot_interrupted \
-    ((xibot_sig_query(XIBOT_SIGINT_ID, -1) == SIGINT) || \
-    (xibot_sig_query(XIBOT_SIGUSR1_ID, -1) == SIGUSR1))
-#endif
 #include "player.h"
 
+extern thrlck_t _xibot_state;
 int xibot_wait(int *i, xibot_callback_fn finished_cb, void *arg) {
     while(*i == 0) {
-        if(xibot_interrupted) {
+        if(xibot_is_interrupted()) {
             break;
         }
         usleep(100);
@@ -54,6 +50,7 @@ void *xibot_media_play(void *arg) {
     time_t t1, t2;
 
     mpp = (media_play_param_t *) arg;
+
     /*
     fprintf(stderr, "xibot_media_play() media %s from region %s is playing for %d seconds\n",
             mpp->media->id, mpp->region_id, mpp->media->duration);
@@ -61,7 +58,7 @@ void *xibot_media_play(void *arg) {
     t1 = time(NULL) + mpp->media->duration;
 
     while((t2 = time(NULL)) < t1) {
-        if(xibot_interrupted)
+        if(xibot_is_play_interrupted())
             break;
         usleep(100);
     }
@@ -90,7 +87,7 @@ void *xibot_region_play(void *arg) {
     mpp = NULL;
     path_len = strlen(rpp->saveDir) + strlen(rpp->region->id) + digitlen(rpp->layout_id) + 9;
     for(i = 0; i < rpp->nmedia; i++) {
-        if(xibot_interrupted)
+        if(xibot_is_play_interrupted())
             continue;
 
         media = xlfparser_get_media(rpp->region, i);
@@ -108,7 +105,6 @@ void *xibot_region_play(void *arg) {
             sprintf(path, XIBOT_RES_FILE_SFMT,
                     rpp->saveDir, rpp->layout_id, rpp->region->id, media->id);
         }
-
         mpp->path = str_duplicate(path);
         mpp->media = xlfparser_media_dup(media);
         mpp->region_id = str_duplicate(rpp->region->id);
@@ -145,14 +141,15 @@ void *xibot_layout_play(void *arg) {
     nregion = lpp->nregion;
 
     threads = calloc(nregion, sizeof(pthread_t));
-    attrs = calloc(nregion, sizeof(pthread_attr_t));
+    attrs = malloc(nregion * sizeof(pthread_attr_t));
 
+    xibot_set_state(&_xibot_state, XIBOT_STATE_LAYOUT_PLAY, XIBOT_STATE_TRUE);
     for(i = 0; i < nregion; i++) {
-        if(xibot_interrupted) {
+        if(xibot_is_play_interrupted()) {
             /*
             fprintf(stderr, "xibot_layout_play() skipping region %d\n", i);
             */
-            continue;
+            break;
         }
 
         pthread_attr_init(&attrs[i]);
@@ -186,7 +183,7 @@ void *xibot_layout_play(void *arg) {
     threads = NULL;
     xlfparser_delete_layout(lpp->layout);
     free(arg);
-    xibot_clear_sigusr1;
+    xibot_set_state(&_xibot_state, XIBOT_STATE_LAYOUT_PLAY, XIBOT_STATE_FALSE);
 
     return NULL;
 }

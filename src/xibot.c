@@ -102,7 +102,7 @@ void *xibot_schedule_handler(void *arg) {
         layout_play_cb = xibot_layout_play;
     }
 
-    if(!xibot_thr_exists(thread)) {
+    if(xibot_get_state(&_xibot_state, XIBOT_STATE_LAYOUT_PLAY) == XIBOT_STATE_FALSE) {
         if(!xibot_is_interrupted()) {
             lpp = malloc(sizeof(layout_play_param_t));
             lpp->layout = xlfparser_layout_dup(layout);
@@ -125,7 +125,7 @@ void *xibot_schedule_handler(void *arg) {
     xlfparser_delete_layout(layout);
 
     if(xibot_is_interrupted()) {
-        while(xibot_thr_exists(thread)) {
+        while(xibot_get_state(&_xibot_state, XIBOT_STATE_LAYOUT_PLAY) == XIBOT_STATE_TRUE) {
             fprintf(stderr, "Waiting play thread %lu\n", thread);
             usleep(100);
         }

@@ -192,12 +192,12 @@ void *xmds_cycle(void *arg) {
             break;
     }
 
-    while(xibot_get_state(&_xibot_state, XIBOT_STATE_LAYOUT_PLAY) == XIBOT_STATE_TRUE) {
-        usleep(100);
-    }
-
-    if(xibot_is_play_interrupted())
+    if(xibot_is_play_interrupted()) {
+        while(xibot_get_state(&_xibot_state, XIBOT_STATE_LAYOUT_PLAY) == XIBOT_STATE_TRUE) {
+            usleep(100);
+        }
         xibot_set_state(&_xibot_state, XIBOT_PLAY_INTERRUPTED, XIBOT_STATE_FALSE);
+    }
 
     xibot_set_state(&_xibot_state, XIBOT_STATE_XMDS, XIBOT_STATE_FALSE);
     return NULL;

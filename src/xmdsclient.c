@@ -168,6 +168,9 @@ void *xmds_cycle(void *arg) {
 
     time_t t1;
 
+    if(xmds_is_running())
+        return NULL;
+
     memset(&di, '\0', sizeof(xmds_display_attr_t));
     xmds_attr = (xmds_attr_t *) arg;
     xibot_set_state(&_xibot_state, XIBOT_STATE_XMDS, XIBOT_STATE_TRUE);

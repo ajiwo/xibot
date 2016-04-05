@@ -19,6 +19,7 @@ set(srcs
 set(install_headers
     src/attrs.h
     src/player.h
+    src/thrlck.h
     src/xibot.h
     src/xignal.h
 )

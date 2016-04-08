@@ -96,6 +96,9 @@ void *xibot_schedule_handler(void *arg) {
     free(path);
     layout = xlfparser_get_layout(node);
 
+    if(layout == NULL)
+        return NULL;
+
     if(xos_attr->layout_play_cb != NULL) {
         layout_play_cb = xos_attr->layout_play_cb;
     } else {

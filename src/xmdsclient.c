@@ -168,8 +168,10 @@ void *xmds_cycle(void *arg) {
 
     time_t t1;
 
-    if(xmds_is_running())
+    if(xmds_is_running()) {
+        usleep(500);
         return NULL;
+    }
 
     memset(&di, '\0', sizeof(xmds_display_attr_t));
     xmds_attr = (xmds_attr_t *) arg;
@@ -186,9 +188,9 @@ void *xmds_cycle(void *arg) {
     }
 
     while(time(NULL) < t1) {
-        usleep(100);
+        usleep(500);
         if(xibot_is_play_interrupted()) {
-            usleep(50);
+            usleep(250);
             break;
         }
         if(xibot_is_interrupted())
@@ -197,7 +199,7 @@ void *xmds_cycle(void *arg) {
 
     if(xibot_is_play_interrupted()) {
         while(xibot_get_state(&_xibot_state, XIBOT_STATE_LAYOUT_PLAY) == XIBOT_STATE_TRUE) {
-            usleep(100);
+            usleep(500);
         }
         xibot_set_state(&_xibot_state, XIBOT_PLAY_INTERRUPTED, XIBOT_STATE_FALSE);
     }
@@ -209,11 +211,11 @@ void *xmds_cycle(void *arg) {
 
 /* invoked by xibot.c/xibot_run() */
 void _xmds_run_thread(xmds_attr_t *xmds_attr) {
-    static pthread_t pth;
+    pthread_t pth;
     pthread_attr_t pth_attr;
 
     pthread_attr_init(&pth_attr);
-    pthread_attr_setdetachstate(&pth_attr, PTHREAD_CREATE_DETACHED);
+    pthread_attr_setdetachstate(&pth_attr, PTHREAD_CREATE_JOINABLE);
 
     while(1) {
         if(xibot_is_interrupted())
@@ -222,12 +224,12 @@ void _xmds_run_thread(xmds_attr_t *xmds_attr) {
             if(pthread_create(&pth, &pth_attr, xmds_cycle, xmds_attr) == 0) {
                 fprintf(stderr, "Created xmds thread %lu\n",pth);
             }
+            pthread_join(pth, NULL);
         }
-        usleep(100);
     }
 
     while(xmds_is_running())
-        usleep(100);
+        usleep(500);
 
     pthread_attr_destroy(&pth_attr);
 }

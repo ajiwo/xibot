@@ -14,12 +14,13 @@ extern thrlck_t _xibot_state;
 int xibot_wait(int *i, xibot_callback_fn finished_cb, void *arg) {
     while(*i == 0) {
         if(xibot_is_interrupted() || xibot_is_play_interrupted()) {
+            *i = 2;
             fprintf(stderr, "xibot_wait INTERRUPTED\n");
             break;
         }
         usleep(100);
     }
-
+    *i = 1;
     if(finished_cb != NULL)
         finished_cb(arg);
 
@@ -103,7 +104,11 @@ void *xibot_region_play(void *arg) {
             if(ouri && ouri->value) {
                 path = malloc(path_len + 1);
                 path[path_len] = '\0';
-                sprintf(path, XIBOT_MEDIA_FILE_SFMT, rpp->saveDir, ouri->value);
+                if(!strcmp(media->type, "webpage")) {
+                    sprintf(path, "%s", ouri->value);
+                } else {
+                    sprintf(path, XIBOT_MEDIA_FILE_SFMT, rpp->saveDir, ouri->value);
+                }
             } else {
                 path_len += strlen(media->id);
                 path = malloc(path_len + 1);
@@ -136,7 +141,7 @@ void *xibot_region_play(void *arg) {
 }
 
 void *xibot_layout_play(void *arg) {
-    int i;
+    int i, j;
     int nopt, nmedia, nregion;
     Region *region;
     layout_play_param_t *lpp;
@@ -160,6 +165,7 @@ void *xibot_layout_play(void *arg) {
             /*
             fprintf(stderr, "xibot_layout_play() skipping region %d\n", i);
             */
+            usleep(500);
             break;
         }
 
@@ -179,8 +185,8 @@ void *xibot_layout_play(void *arg) {
         }
     }
 
-    for(i = 0; i < nregion; i++) {
-        if(pthread_join(threads[i], NULL) != 0)
+    for(j = 0; j < i; j++) {
+        if(pthread_join(threads[j], NULL) != 0)
             fprintf(stderr, "xibot_layout_play() pthread_join failed\n");
     }
     pthread_attr_destroy(&attrs);
